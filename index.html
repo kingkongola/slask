@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yrkesväljaren Hello World</title>
+    <script type="module" src="https://yrkesvaljaren-ebce46.gitlab.io/build/p-43a8c408.js" data-stencil data-resources-url="/build/" data-stencil-namespace="yrkesvaljaren"></script>
+    <link rel="stylesheet" href="https://yrkesvaljaren-ebce46.gitlab.io/digi-arbetsformedlingen/digi-arbetsformedlingen.css">
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            padding: 2em;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 2em;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #005a9c;
+        }
+        h4 {
+            margin-top: 2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Enkelval (standard)</h1>
+    <yrkes-valjaren id="single-select-box" yv-label="Välj yrke" yv-placeholder="T.ex. snickare, undersköterska, programmerare..."></yrkes-valjaren>
+    <h4>Mottagen data från <code>yrkesvaljareSelection</code>:</h4>
+    <pre id="single-output">Väntar på val...</pre>
+
+    <hr>
+
+    <h1>Flervals-exempel</h1>
+    <yrkes-valjaren id="multi-select-box" yv-label="Välj ett eller flera yrken" yv-enable-multiple="true"></yrkes-valjaren>
+    <h4>Mottagen data från <code>yrkesvaljareSelection</code>:</h4>
+    <pre id="multi-output">Väntar på val...</pre>
+
+    <script>
+        const singleBox = document.getElementById('single-select-box');
+        const multiBox = document.getElementById('multi-select-box');
+        const singleOutput = document.getElementById('single-output');
+        const multiOutput = document.getElementById('multi-output');
+
+        singleBox.addEventListener('yrkesvaljareSelection', (event) => {
+          singleOutput.textContent = JSON.stringify(event.detail, null, 2);
+        });
+
+        multiBox.addEventListener('yrkesvaljareSelection', (event) => {
+          if (event.detail.length > 0) {
+            multiOutput.textContent = JSON.stringify(event.detail, null, 2);
+          } else {
+            multiOutput.textContent = "Inga valda ännu (event med tom array mottogs)";
+          }
+        });
+    </script>
+    </div>
+</body>
+</html>
