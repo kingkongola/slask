@@ -1,0 +1,79 @@
+name: Fjarran Google Maps access probe
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/fjarran-maps-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: curl Google Maps HTML
+        shell: bash
+        run: |
+          URL='https://www.google.com/maps/place/Fj%C3%A4rran+H%C3%B6jderbadet/@60.665172,17.1295169,404m/data=!3m2!1e3!4b1!4m6!3m5!1s0x4660c644d7549cc5:0xb15de411a0ab2c2f!8m2!3d60.6651694!4d17.1320918!16s%2Fg%2F1hc193l6m?entry=ttu'
+          curl -sSL --max-time 40 -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36' -o /tmp/maps.html -w 'curl http_code=%{http_code} bytes=%{size_download} url=%{url_effective}\n' "$URL" || true
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          p=Path('/tmp/maps.html')
+          s=p.read_text(errors='replace') if p.exists() else ''
+          for needle in ['Fjärran', 'Fjarran', 'Popular times', 'Populära tider', 'Live', 'busy', 'belastning', 'captcha', 'unusual traffic']:
+              hits=list(re.finditer(re.escape(needle),s,re.I))
+              print(f"curl needle={needle!r} count={len(hits)} examples={[re.sub(r'\s+', ' ', s[max(0,m.start()-90):m.end()+150])[:240] for m in hits[:2]]}")
+          PY
+      - name: Install Playwright Chromium
+        run: |
+          python3 -m pip install --quiet playwright
+          python3 -m playwright install --with-deps chromium
+      - name: Load Google Maps in Chromium
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import asyncio, re
+          from playwright.async_api import async_playwright
+          URL='https://www.google.com/maps/place/Fj%C3%A4rran+H%C3%B6jderbadet/@60.665172,17.1295169,404m/data=!3m2!1e3!4b1!4m6!3m5!1s0x4660c644d7549cc5:0xb15de411a0ab2c2f!8m2!3d60.6651694!4d17.1320918!16s%2Fg%2F1hc193l6m?entry=ttu'
+          async def main():
+              async with async_playwright() as p:
+                  browser=await p.chromium.launch(headless=True,args=['--disable-dev-shm-usage'])
+                  page=await browser.new_page(locale='sv-SE',timezone_id='Europe/Stockholm',viewport={'width':1440,'height':1000})
+                  print('browser navigation starting',flush=True)
+                  try:
+                      response=await page.goto(URL,wait_until='domcontentloaded',timeout=45000)
+                      print('browser http_status=',response.status if response else None,flush=True)
+                  except Exception as e:
+                      print('browser navigation error:',repr(e),flush=True)
+                  await page.wait_for_timeout(16000)
+                  for consent in ['Godkänn alla', 'Acceptera alla', 'Accept all']:
+                      try:
+                          el=page.get_by_role('button',name=consent,exact=True).first
+                          await el.click(timeout=1200)
+                          print('clicked cookie button=',consent,flush=True)
+                          await page.wait_for_timeout(9000)
+                          break
+                      except Exception:
+                          pass
+                  print('browser final_url=',page.url,flush=True)
+                  print('browser title=',await page.title(),flush=True)
+                  txt=await page.locator('body').inner_text(timeout=12000)
+                  print('browser visible_text_length=',len(txt),flush=True)
+                  print('browser text_start=',repr(txt[:1800]),flush=True)
+                  for needle in ['Fjärran', 'Fjarran', 'Populära tider', 'Popular times', 'Live', 'Just nu', 'Vanligtvis', 'mindre folk', 'mer folk', 'busy', 'belastning', 'ovanligt']:
+                      matches=list(re.finditer(re.escape(needle),txt,re.I))
+                      print(f"browser needle={needle!r} count={len(matches)} examples={[txt[max(0,m.start()-200):m.end()+250].replace(chr(10),' | ') for m in matches[:3]]}",flush=True)
+                  await page.screenshot(path='/tmp/fjarran-maps.png',full_page=False,timeout=15000)
+                  await browser.close()
+          asyncio.run(main())
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fjarran-maps-screenshot
+          path: /tmp/fjarran-maps.png
+          if-no-files-found: ignore
